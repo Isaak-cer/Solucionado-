@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Abrir SMS</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; background:#f7f7f7; }
+    .card { background:white; padding:24px; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,0.08); text-align:center; width:320px; }
+    button { font-size:16px; padding:12px 18px; border-radius:8px; border:0; cursor:pointer; }
+    .hint { font-size:13px; color:#666; margin-top:10px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Abrir SMS</h2>
+    <p class="hint">Al pulsar, se intentará abrir la app de mensajes (SMS) con el número y texto precargados.</p>
+
+    <!-- BOTÓN QUE INTENTA variar entre varias estrategias -->
+    <button id="sendSmsBtn">Enviar SMS</button>
+
+    <p class="hint" id="status"></p>
+  </div>
+
+  <script>
+    (function () {
+      // Cambia estos valores por el número y texto que quieras
+      // Número en formato internacional recomendado, p.ej. +34XXXXXXXXX
+      const phoneNumber = '+34123456789';
+      const messageText = 'Hola, este es un mensaje de prueba.';
+
+      const encode = (s) => encodeURIComponent(s);
+
+      // URIs probadas:
+      const smsUri1 = `sms:${phoneNumber}?body=${encode(messageText)}`;        // ampliamente usado
+      const smsUri2 = `smsto:${phoneNumber}?body=${encode(messageText)}`;      // alternativa
+      // Intent URI para Android (puede abrir la app de mensajería nativa o mostrar selector)
+      const intentUri = `intent://send/${phoneNumber}#Intent;scheme=smsto;action=android.intent.action.SENDTO;S.body=${encode(messageText)};end`;
+
+      const btn = document.getElementById('sendSmsBtn');
+      const status = document.getElementById('status');
+
+      function isMobile() {
+        return /Android|iPhone|iPad|iPod|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      }
+
+      btn.addEventListener('click', function () {
+        status.textContent = '';
+
+        if (!isMobile()) {
+          // En ordenadores no suele funcionar — avisamos
+          status.textContent = 'Estás en un ordenador: abrir SMS no está soportado en la mayoría de navegadores de escritorio.';
+        }
+
+        // Estrategia: intentar sms:, si falla intentar smsto:, si Android intentar intent:
+        // Nota: no hay forma fiable en web de detectar si la URI "falló" — los navegadores simplemente ignoran o muestran error.
+        // Aquí hacemos intentos en orden — el primero que funcione abrirá la app en la mayoría de dispositivos.
+        try {
+          // Primer intento: esquema sms:
+          window.location.href = smsUri1;
+          // Si el browser no cambia de aplicación, después de un pequeño retardo probamos otra cosa.
+          setTimeout(() => {
+            // Segundo intento: smsto:
+            window.location.href = smsUri2;
+          }, 500);
+          setTimeout(() => {
+            // Tercer intento (Android): intent URI
+            window.location.href = intentUri;
+          }, 1000);
+        } catch (err) {
+          console.error(err);
+          status.textContent = 'No se pudo lanzar la app de SMS desde este navegador.';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
