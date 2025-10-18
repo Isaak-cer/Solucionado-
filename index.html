@@ -3,50 +3,69 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Enviar correo</title>
+  <title>Abrir SMS</title>
   <style>
-    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; background:#f5f5f5; }
-    .card { background:white; padding:24px; border-radius:12px; box-shadow:0 8px 25px rgba(0,0,0,0.1); text-align:center; width:320px; }
-    button { font-size:16px; padding:12px 18px; border-radius:8px; border:0; cursor:pointer; background:#007bff; color:white; }
-    button:hover { background:#0056b3; }
-    .hint { font-size:13px; color:#666; margin-top:10px; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; padding: 24px; max-width:700px; margin:auto; }
+    label, input, textarea, button { display:block; width:100%; margin-top:8px; }
+    input, textarea { padding:8px; font-size:16px; box-sizing:border-box; }
+    button { margin-top:16px; padding:12px; font-size:16px; cursor:pointer; }
+    .note { margin-top:12px; color:#555; font-size:14px; }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h2>Enviar correo electrónico</h2>
-    <p class="hint">Pulsa el botón para abrir tu aplicación de correo con los datos precargados.</p>
+  <h1>Abrir app de SMS con mensaje</h1>
 
-    <button id="sendEmailBtn">Enviar correo</button>
+  <label for="number">Número (opcional, deja en blanco si solo quieres el texto):</label>
+  <input id="number" type="tel" placeholder="+34123456789">
 
-    <p class="hint" id="status"></p>
-  </div>
+  <label for="body">Texto del mensaje:</label>
+  <textarea id="body" rows="4" placeholder="Fuente: GSM Prime https://ejemplo.com ..."></textarea>
+
+  <button id="openSms">Abrir app de SMS</button>
+
+  <p class="note">
+    Esto intentará abrir la app de mensajes del dispositivo. Si el navegador lo bloquea, prueba a:
+    1) abrir esta página desde el navegador del teléfono (no desde el escritorio),
+    2) permitir abrir aplicaciones desde enlaces (si aparece una opción),
+    o 3) copiar y pegar el texto manualmente en tu app de SMS.
+  </p>
 
   <script>
-    (function () {
-      // Cambia estos valores por los tuyos
-      const destinatario = 'correo@ejemplo.com';
-      const asunto = 'Consulta desde mi página';
-      const cuerpo = 'Hola, quería ponerme en contacto contigo.';
+    function buildSmsHref(number, text) {
+      // Encodeamos el cuerpo
+      const encoded = encodeURIComponent(text || '');
+      // iOS usa &body (cuando número está presente), Android usa ?body
+      const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      if (!number) {
+        // Si no hay número, solo esquema sms: con body funciona usando ?body o &body;
+        return isIOS ? 'sms:&body=' + encoded : 'sms:?body=' + encoded;
+      } else {
+        // Con número, iOS tiende a preferir &body, Android ?
+        return isIOS ? ('sms:' + number + '&body=' + encoded) : ('sms:' + number + '?body=' + encoded);
+      }
+    }
 
-      const encode = (s) => encodeURIComponent(s);
+    document.getElementById('openSms').addEventListener('click', function (e) {
+      const number = document.getElementById('number').value.trim();
+      const text = document.getElementById('body').value;
 
-      // URI estándar mailto
-      const mailtoLink = `mailto:${destinatario}?subject=${encode(asunto)}&body=${encode(cuerpo)}`;
+      if (!text && !number) {
+        alert('Introduce al menos un número o un texto para el mensaje.');
+        return;
+      }
 
-      const btn = document.getElementById('sendEmailBtn');
-      const status = document.getElementById('status');
+      const href = buildSmsHref(number, text);
 
-      btn.addEventListener('click', function () {
-        try {
-          window.location.href = mailtoLink;
-          status.textContent = 'Abriendo tu aplicación de correo...';
-        } catch (err) {
-          console.error(err);
-          status.textContent = 'No se pudo abrir el correo. Intenta desde otro navegador o dispositivo.';
-        }
-      });
-    })();
+      // Creamos un enlace y simulamos click (método simple y compatible)
+      const a = document.createElement('a');
+      a.href = href;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      // Nota: no hay forma fiable de detectar desde JS si la app se abrió correctamente.
+    });
   </script>
 </body>
 </html>
