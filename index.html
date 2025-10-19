@@ -3,69 +3,43 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Abrir SMS</title>
+  <title>Página principal — Ejemplo seguro</title>
   <style>
-    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; padding: 24px; max-width:700px; margin:auto; }
-    label, input, textarea, button { display:block; width:100%; margin-top:8px; }
-    input, textarea { padding:8px; font-size:16px; box-sizing:border-box; }
-    button { margin-top:16px; padding:12px; font-size:16px; cursor:pointer; }
-    .note { margin-top:12px; color:#555; font-size:14px; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; padding: 1.2rem; color:#111; }
+    button { font-size:1rem; padding: .6rem 1rem; margin: .4rem 0; }
+    a.button { display:inline-block; text-decoration:none; background:#007bff; color:#fff; padding:.6rem 1rem; border-radius:6px; }
+    small { color:#555; display:block; margin-top:.6rem; }
   </style>
 </head>
 <body>
-  <h1>Abrir app de SMS con mensaje</h1>
+  <h1>Ejemplo seguro — Ajustes y Cámara</h1>
 
-  <label for="number">Número (opcional, deja en blanco si solo quieres el texto):</label>
-  <input id="number" type="tel" placeholder="+34123456789">
+  <p>Botón que intentará abrir Ajustes en Android (requiere acción del usuario y que el navegador lo soporte):</p>
+  <button id="openSettings">Abrir Ajustes</button>
+  <div id="fallback" style="display:none; margin-top:.6rem;">
+    <strong>No se pudo abrir automáticamente.</strong>
+    <p>Abre manualmente la app <em>Ajustes</em> en tu dispositivo. (Esto no intenta eludir protecciones.)</p>
+  </div>
 
-  <label for="body">Texto del mensaje:</label>
-  <textarea id="body" rows="4" placeholder="Fuente: GSM Prime https://ejemplo.com ..."></textarea>
+  <hr />
 
-  <button id="openSms">Abrir app de SMS</button>
-
-  <p class="note">
-    Esto intentará abrir la app de mensajes del dispositivo. Si el navegador lo bloquea, prueba a:
-    1) abrir esta página desde el navegador del teléfono (no desde el escritorio),
-    2) permitir abrir aplicaciones desde enlaces (si aparece una opción),
-    o 3) copiar y pegar el texto manualmente en tu app de SMS.
-  </p>
+  <p>Ir a la página <code>shhh</code> (cámara web + compartir):</p>
+  <a class="button" href="shhh.html">Ir a "shhh" — Cámara</a>
 
   <script>
-    function buildSmsHref(number, text) {
-      // Encodeamos el cuerpo
-      const encoded = encodeURIComponent(text || '');
-      // iOS usa &body (cuando número está presente), Android usa ?body
-      const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-      if (!number) {
-        // Si no hay número, solo esquema sms: con body funciona usando ?body o &body;
-        return isIOS ? 'sms:&body=' + encoded : 'sms:?body=' + encoded;
-      } else {
-        // Con número, iOS tiende a preferir &body, Android ?
-        return isIOS ? ('sms:' + number + '&body=' + encoded) : ('sms:' + number + '?body=' + encoded);
+    document.getElementById('openSettings').addEventListener('click', function () {
+      var intentUri = 'intent:#Intent;action=android.settings.SETTINGS;end';
+      try {
+        window.location = intentUri;
+        setTimeout(function() {
+          document.getElementById('fallback').style.display = 'block';
+        }, 1200);
+      } catch (e) {
+        document.getElementById('fallback').style.display = 'block';
       }
-    }
-
-    document.getElementById('openSms').addEventListener('click', function (e) {
-      const number = document.getElementById('number').value.trim();
-      const text = document.getElementById('body').value;
-
-      if (!text && !number) {
-        alert('Introduce al menos un número o un texto para el mensaje.');
-        return;
-      }
-
-      const href = buildSmsHref(number, text);
-
-      // Creamos un enlace y simulamos click (método simple y compatible)
-      const a = document.createElement('a');
-      a.href = href;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-
-      // Nota: no hay forma fiable de detectar desde JS si la app se abrió correctamente.
     });
   </script>
+
+  <small>Con la verdad: esto no elude bloqueos ni permisos; el usuario debe permitir el acceso a la cámara o confirmar acciones.</small>
 </body>
 </html>
