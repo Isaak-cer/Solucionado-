@@ -11,6 +11,7 @@
     #video { max-width:100%; border-radius:8px; background:#000; }
     #photoPreview { display:block; max-width:100%; margin-top:.6rem; border-radius:8px; }
     .note { color:#555; margin-top:.6rem; }
+    #manualStart { display:none; background:#28a745; color:#fff; border:none; border-radius:6px; }
   </style>
 </head>
 <body>
@@ -28,6 +29,8 @@
     <button id="openImage" disabled>Abrir imagen</button>
   </div>
 
+  <button id="manualStart">Activar cámara manualmente</button>
+
   <img id="photoPreview" alt="Previsualización de la foto" />
 
   <p class="note" id="info">Estado: inicializando...</p>
@@ -44,6 +47,7 @@
     const info = document.getElementById('info');
     const switchBtn = document.getElementById('switch');
     const openImageBtn = document.getElementById('openImage');
+    const manualStartBtn = document.getElementById('manualStart');
 
     let currentStream = null;
     let currentDeviceId = null;
@@ -70,22 +74,21 @@
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         currentStream = stream;
         video.srcObject = stream;
+        manualStartBtn.style.display = 'none';
         info.textContent = 'Cámara activa.';
-        // obtener deviceId actual si es posible
         await listCameras();
         if(videoDevices.length && !deviceId){
-          // intentar inferir deviceId del stream
           const track = stream.getVideoTracks()[0];
           const settings = track.getSettings();
           if(settings && settings.deviceId) currentDeviceId = settings.deviceId;
         } else {
           currentDeviceId = deviceId;
         }
-        // habilitar cambio si hay varias cámaras
         switchBtn.disabled = (videoDevices.length < 2);
       } catch(err){
         console.error('Error al acceder a la cámara:', err);
-        info.textContent = 'No se pudo acceder a la cámara. Comprueba permisos y que estás en HTTPS.';
+        info.textContent = 'No se pudo acceder a la cámara. Puedes intentar activarla manualmente.';
+        manualStartBtn.style.display = 'inline-block';
       }
     }
 
@@ -96,12 +99,17 @@
       }
     }
 
+    manualStartBtn.addEventListener('click', () => {
+      manualStartBtn.style.display = 'none';
+      info.textContent = 'Intentando activar la cámara...';
+      startCamera();
+    });
+
     takeBtn.addEventListener('click', async () => {
       if(!currentStream){
         info.textContent = 'Cámara no activa.';
         return;
       }
-      // dibujar frame en canvas
       const width = video.videoWidth || 1280;
       const height = video.videoHeight || 720;
       canvas.width = width;
@@ -109,7 +117,6 @@
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0, width, height);
 
-      // convertir a blob
       canvas.toBlob(async (blob) => {
         if(!blob){ info.textContent = 'No se pudo generar la imagen.'; return; }
         lastBlob = blob;
@@ -119,7 +126,6 @@
         shareBtn.disabled = false;
         openImageBtn.disabled = false;
 
-        // preparar enlace de descarga
         const filename = `foto_${Date.now()}.png`;
         downloadA.href = url;
         downloadA.download = filename;
@@ -128,7 +134,6 @@
       }, 'image/png');
     });
 
-    // compartir
     shareBtn.addEventListener('click', async () => {
       if(!lastBlob){
         info.textContent = 'No hay foto para compartir.';
@@ -136,7 +141,6 @@
       }
       info.textContent = 'Preparando para compartir...';
       try {
-        // Si el navegador soporta navigator.share con archivos
         if(navigator.canShare && navigator.canShare({ files: [new File([lastBlob], 'foto.png', { type: lastBlob.type })] }) ) {
           const file = new File([lastBlob], 'foto.png', { type: lastBlob.type });
           await navigator.share({
@@ -147,24 +151,17 @@
           info.textContent = 'Compartido.';
           return;
         }
-
-        // Si tiene navigator.share pero no soporte de files (solo url/text)
         if(navigator.share){
-          // crear URL temporal hacia la imagen
           const url = URL.createObjectURL(lastBlob);
           await navigator.share({
             title: 'Mi foto',
             text: 'Te comparto esta foto (abre el enlace)',
             url: url
           });
-          // Nota: algunos sistemas ignorarán el url si no es https o no es accesible desde otros dispositivos.
           info.textContent = 'Intento de compartido con URL (si no funciona, descarga la imagen y compártela manualmente).';
           setTimeout(()=> URL.revokeObjectURL(url), 2000);
           return;
         }
-
-        // Fallbacks: oferta de descarga y copiar al portapapeles si permite
-        // Intentar copiar al portapapeles como blob -> requiere permiso y soporte (ClipboardItem)
         if(navigator.clipboard && window.ClipboardItem){
           try {
             const item = new ClipboardItem({ [lastBlob.type]: lastBlob });
@@ -175,8 +172,6 @@
             console.warn('No se pudo copiar al portapapeles:', err);
           }
         }
-
-        // último recurso: abrir la imagen en nueva pestaña y sugerir descargar
         const url = URL.createObjectURL(lastBlob);
         window.open(url, '_blank');
         info.textContent = 'Abrí la imagen en una pestaña nueva; usa "Guardar como" o descarga para compartir manualmente.';
@@ -187,21 +182,15 @@
       }
     });
 
-    // cambiar cámara (si hay más de una)
     switchBtn.addEventListener('click', async () => {
       if(videoDevices.length < 2){ info.textContent = 'No hay más cámaras detectadas.'; return; }
-      // encontrar índice actual
       let idx = videoDevices.findIndex(d => d.deviceId === currentDeviceId);
       idx = (idx + 1) % videoDevices.length;
       const next = videoDevices[idx];
-      if(next) {
-        await startCamera(next.deviceId);
-      } else {
-        info.textContent = 'Imposible cambiar de cámara.';
-      }
+      if(next) await startCamera(next.deviceId);
+      else info.textContent = 'Imposible cambiar de cámara.';
     });
 
-    // abrir imagen en nueva pestaña
     openImageBtn.addEventListener('click', () => {
       if(!lastBlob) return;
       const url = URL.createObjectURL(lastBlob);
@@ -209,18 +198,16 @@
       setTimeout(()=> URL.revokeObjectURL(url), 5000);
     });
 
-    // iniciar
     (async function init(){
       if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
         info.textContent = 'Tu navegador no soporta acceso a la cámara desde la web.';
+        manualStartBtn.style.display = 'inline-block';
         return;
       }
       await listCameras();
       await startCamera();
-      info.textContent = 'Listo. Pulsa "Tomar foto".';
     })();
 
-    // limpiar al salir
     window.addEventListener('beforeunload', () => stopCamera());
   })();
   </script>
