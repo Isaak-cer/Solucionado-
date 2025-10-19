@@ -7,16 +7,16 @@
   <style>
     body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; padding: 1rem; color:#111; }
     .controls { margin-top:.6rem; display:flex; gap:.5rem; flex-wrap:wrap; }
-    button { padding:.6rem 1rem; font-size:1rem; }
+    button { padding:.6rem 1rem; font-size:1rem; cursor:pointer; }
     #video { max-width:100%; border-radius:8px; background:#000; }
     #photoPreview { display:block; max-width:100%; margin-top:.6rem; border-radius:8px; }
     .note { color:#555; margin-top:.6rem; }
-    #manualStart { display:none; background:#28a745; color:#fff; border:none; border-radius:6px; }
+    #manualStart { display:none; background:#28a745; color:#fff; border:none; border-radius:6px; margin-top:1rem; }
   </style>
 </head>
 <body>
   <h1>shhh — Cámara</h1>
-  <p>Pulsa <strong>Permitir</strong> cuando el navegador pregunte por la cámara. Si no aparece el permiso, comprueba que estás en HTTPS o en <code>localhost</code>.</p>
+  <p>Pulsa <strong>Permitir</strong> cuando el navegador pregunte por la cámara. Si no aparece, comprueba que estás en HTTPS o <code>localhost</code>.</p>
 
   <video id="video" autoplay playsinline></video>
   <canvas id="canvas" style="display:none;"></canvas>
@@ -24,7 +24,7 @@
   <div class="controls">
     <button id="take">Tomar foto</button>
     <button id="switch" title="Cambiar cámara (si hay más de una)">🔁 Cambiar cámara</button>
-    <button id="share" disabled>Compartir</button>
+    <button id="share">Compartir</button>
     <a id="download" style="display:inline-block; text-decoration:none; padding:.5rem .8rem; border:1px solid #ccc; border-radius:6px; color:inherit;">Descargar</a>
     <button id="openImage" disabled>Abrir imagen</button>
   </div>
@@ -34,7 +34,7 @@
   <img id="photoPreview" alt="Previsualización de la foto" />
 
   <p class="note" id="info">Estado: inicializando...</p>
-  <p class="note">Con la verdad: la web solo puede usar la cámara si tú lo permites. La imagen solo se comparte desde tu dispositivo cuando tú lo decides.</p>
+  <p class="note">Con la verdad: la cámara solo se usa si tú lo permites. La imagen se comparte solo si tú lo decides.</p>
 
   <script>
   (function(){
@@ -87,7 +87,7 @@
         switchBtn.disabled = (videoDevices.length < 2);
       } catch(err){
         console.error('Error al acceder a la cámara:', err);
-        info.textContent = 'No se pudo acceder a la cámara. Puedes intentar activarla manualmente.';
+        info.textContent = 'No se pudo acceder a la cámara. Pulsa "Activar cámara manualmente" para intentarlo de nuevo.';
         manualStartBtn.style.display = 'inline-block';
       }
     }
@@ -99,10 +99,15 @@
       }
     }
 
-    manualStartBtn.addEventListener('click', () => {
-      manualStartBtn.style.display = 'none';
-      info.textContent = 'Intentando activar la cámara...';
-      startCamera();
+    // 🔧 FIX: evento seguro y visible para el botón manual
+    manualStartBtn.addEventListener('click', async () => {
+      info.textContent = 'Intentando activar la cámara manualmente...';
+      manualStartBtn.disabled = true;
+      try {
+        await startCamera();
+      } finally {
+        manualStartBtn.disabled = false;
+      }
     });
 
     takeBtn.addEventListener('click', async () => {
@@ -123,7 +128,6 @@
         const url = URL.createObjectURL(blob);
         preview.src = url;
         preview.style.display = 'block';
-        shareBtn.disabled = false;
         openImageBtn.disabled = false;
 
         const filename = `foto_${Date.now()}.png`;
@@ -135,13 +139,9 @@
     });
 
     shareBtn.addEventListener('click', async () => {
-      if(!lastBlob){
-        info.textContent = 'No hay foto para compartir.';
-        return;
-      }
       info.textContent = 'Preparando para compartir...';
       try {
-        if(navigator.canShare && navigator.canShare({ files: [new File([lastBlob], 'foto.png', { type: lastBlob.type })] }) ) {
+        if(lastBlob && navigator.canShare && navigator.canShare({ files: [new File([lastBlob], 'foto.png', { type: lastBlob.type })] })) {
           const file = new File([lastBlob], 'foto.png', { type: lastBlob.type });
           await navigator.share({
             files: [file],
@@ -151,31 +151,17 @@
           info.textContent = 'Compartido.';
           return;
         }
+
         if(navigator.share){
-          const url = URL.createObjectURL(lastBlob);
           await navigator.share({
-            title: 'Mi foto',
-            text: 'Te comparto esta foto (abre el enlace)',
-            url: url
+            title: 'shhh',
+            text: lastBlob ? 'No se pudo compartir la imagen.' : 'Todavía no hay foto, pero aquí estoy 😄'
           });
-          info.textContent = 'Intento de compartido con URL (si no funciona, descarga la imagen y compártela manualmente).';
-          setTimeout(()=> URL.revokeObjectURL(url), 2000);
+          info.textContent = lastBlob ? 'Compartido sin imagen.' : 'Compartido sin foto (solo texto).';
           return;
         }
-        if(navigator.clipboard && window.ClipboardItem){
-          try {
-            const item = new ClipboardItem({ [lastBlob.type]: lastBlob });
-            await navigator.clipboard.write([item]);
-            info.textContent = 'Imagen copiada al portapapeles. Pégala donde quieras.';
-            return;
-          } catch (err) {
-            console.warn('No se pudo copiar al portapapeles:', err);
-          }
-        }
-        const url = URL.createObjectURL(lastBlob);
-        window.open(url, '_blank');
-        info.textContent = 'Abrí la imagen en una pestaña nueva; usa "Guardar como" o descarga para compartir manualmente.';
-        setTimeout(()=> URL.revokeObjectURL(url), 5000);
+
+        info.textContent = 'Tu navegador no soporta compartir directamente.';
       } catch (err) {
         console.error('Error al intentar compartir:', err);
         info.textContent = 'Error compartiendo: ' + (err.message || err);
@@ -200,7 +186,7 @@
 
     (async function init(){
       if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-        info.textContent = 'Tu navegador no soporta acceso a la cámara desde la web.';
+        info.textContent = 'Tu navegador no soporta acceso a la cámara.';
         manualStartBtn.style.display = 'inline-block';
         return;
       }
